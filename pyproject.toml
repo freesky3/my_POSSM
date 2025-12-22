@@ -1,0 +1,21 @@
+[project]
+name = "open-dataset"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "nlb-tools",
+    "numpy==1.26.4",
+    "pandas",
+    "matplotlib",
+    "scikit-learn",
+    "torch==2.5.1",
+    "transformers>=4.57.3",
+    "tensorboard>=2.20.0",
+]
+
+[tool.uv]
+dev-dependencies = [
+    "ipykernel",
+]
