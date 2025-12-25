@@ -66,7 +66,7 @@ for index, row in tqdm(dataset.trial_info.iterrows()):
 
     spikes = s_vals[valid_mask] # shape: [time_length, channels]
     vel = v_vals[valid_mask] # shape: [time_length, 2] i.e. [[x, y], [x, y], ...]
-    active_spike = spike_slice_bins(spikes) # shape: length is bin_size, each element is a list of (channel_id, offset), or 0 if no spike
+    active_spike = spike_slice_bins(spikes) # shape: length is num_bins, each element is a list of (channel_id, offset), or 0 if no spike
     trial_max_token = max([len(bin) for bin in active_spike if bin != 0])
 
     sliced_trials.append({

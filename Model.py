@@ -10,7 +10,7 @@ import json
 meta_data = json.load(open("processed_data/meta_data.json", "r"))
 max_time_length = meta_data["max_time_length"]
 
-from Dataloder import get_dataloader    
+from Dataloader import get_dataloader    
 from GRU import POSSM_Backbone_GRU
 from Output_Decoder import POSSMOutputDecoder
 
@@ -27,15 +27,12 @@ class my_POSSM(nn.Module):
         self.register_buffer("freqs_sin", freqs_sin)
         self.output_decoder = POSSMOutputDecoder(config)
 
-    def forward(self, spike, mask_spike, lengths_spike):
-        # spike: (batch, max_bin, max_token, 2)
-        # mask_spike: (batch, max_bin, max_token)
-        # channels: (batch, max_bin, max_token)
-        # offsets: (batch, max_bin, max_token)
+    def forward(self, spike, spike_lengths):
+        # spike: (batch, k_history, max_spikes_in_batch, 2)
+        # spike_lengths: (batch, k_history)
         channels, offsets = spike[..., 0], spike[..., 1]
-        emb = self.emb(channels) # (batch, max_bin, max_token, embed_dim)
-        z = self.Cross_Attention(emb, offsets, mask_spike, self.freqs_cos, self.freqs_sin) # (batch_size, max_bin, num_latents, embed_dim)
-        h, _ = self.gru(z, lengths_spike) # h: (batch_size, max_bin, hidden_dim)
-        vel_pred = self.output_decoder(h, self.freqs_cos, self.freqs_sin) # (batch_size, max_bin * bin_size, 2)
-        vel_pred = vel_pred[:, :max_time_length, :] # (batch_size, max_time_length, 2)
+        emb = self.emb(channels) # (batch, k_history, max_spikes_in_batch, embed_dim)
+        z = self.Cross_Attention(emb, offsets, spike_lengths, self.freqs_cos, self.freqs_sin) # (batch_size, k_history, num_latents, embed_dim)
+        h, _ = self.gru(z) # h: (batch_size, k_history, hidden_dim)
+        vel_pred = self.output_decoder(h, self.freqs_cos, self.freqs_sin) # (batch_size, bin_size, 2)
         return vel_pred

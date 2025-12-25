@@ -41,26 +41,27 @@ class RotaryEmbedding:
         return torch.cat([freqs_cos, freqs_cos], dim=-1), torch.cat([freqs_sin, freqs_sin], dim=-1)
 
     @staticmethod
-    def apply_rotary_pos_emb(q, k, cos, sin, offset, is_decoder):
+    def apply_rotary_pos_emb(q, k, cos, sin, offset=None, is_decoder=False):
         """
         将旋转位置编码 (RoPE) 应用于 Query 和 Key 向量。
 
         Args:
             q (torch.Tensor): Query 状态张量。(只在is_decoder=True时使用)
-                形状为 [batch_size, max_bin, bin_size, num_heads, head_dim]
+                形状为 [Batch, bin_size, Heads, Head_Dim]
             k (torch.Tensor): Key 状态张量。
-                形状为 [batch_size, max_bin, max_token, num_key_value_heads, head_dim]
+                形状为 [batch_size, k_history, max_spikes_in_batch, num_key_value_heads, head_dim]
             cos (torch.Tensor): 预计算的 Cosine 值。
                 形状应为 [bin_size, head_dim] 经过 boardcast 后能与 q, k 广播的形状相同
             sin (torch.Tensor): 预计算的 Sine 值。
                 形状应为 [bin_size, head_dim] 经过 boardcast 后能与 q, k 广播的形状相同
-            offset (batch_size, max_bin, max_token): 需要旋转位置编码向量的相对位置。
+            offset(is_decoder=False): (Batch, k_history, max_spikes_in_batch)需要旋转位置编码向量的相对位置。
+            offset(is_decoder=True): (Batch, bin_size)
 
         Returns:
             Tuple[torch.Tensor, torch.Tensor]: 
                 包含旋转后的 (q_embed, k_embed) 的元组。
-                q_embed: 形状为 [batch_size, max_bin, num_latents, num_heads, head_dim]
-                k_embed: 形状为 [batch_size, max_bin, max_token, num_key_value_heads, head_dim]
+                q_embed: 形状为 [batch_size, k_history, num_latents, num_heads, head_dim]
+                k_embed: 形状为 [batch_size, k_history, max_spikes_in_batch, num_key_value_heads, head_dim]
         """
         def rotate_half(x):
             """
@@ -73,11 +74,11 @@ class RotaryEmbedding:
         
         if is_decoder:
             bin_size, head_dim = cos.shape
-            cos = cos.view(1, 1, bin_size, 1, head_dim)
-            sin = sin.view(1, 1, bin_size, 1, head_dim)
+            cos = cos.view(1, bin_size, 1, head_dim)
+            sin = sin.view(1, bin_size, 1, head_dim)
             q = (q * cos) + (rotate_half(q) * sin)
             return q
         else:
-            cos, sin = cos[offset].unsqueeze(-2), sin[offset].unsqueeze(-2) # cos, sin: [batch_size, max_bin, max_token, 1, head_dim]
+            cos, sin = cos[offset].unsqueeze(-2), sin[offset].unsqueeze(-2) # cos, sin: [batch_size, k_history, max_spikes_in_batch, 1, head_dim]
             k = (k * cos) + (rotate_half(k) * sin)
             return k

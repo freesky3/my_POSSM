@@ -5,6 +5,7 @@ class my_POSSMConfig(PretrainedConfig):
 
     def __init__(
             self,
+            seed: int = 42,
             time_lag =80, # kinematics data lag 80ms relative to neural data
             bin_size = 50,
             num_latents = 1, # number of latent queries
@@ -13,15 +14,15 @@ class my_POSSMConfig(PretrainedConfig):
             dropout: float = 0.0,
             hidden_act: str = 'silu', # core component of SwiGLU
             embed_dim: int = 64, # the dimension of word'set embedding vector
-            hidden_size: int = 128,
+            hidden_size: int = 512,
             
             intermediate_size: int = None,
             vocab_size: int = 182,
 
             # attention
             num_learable_q = 1, 
-            num_attention_heads: int = 8,  
-            num_key_value_heads: int = 2,
+            num_attention_heads: int = 1,  
+            num_key_value_heads: int = 1,
             flash_attn: bool = False,
 
             # gru
@@ -39,6 +40,7 @@ class my_POSSMConfig(PretrainedConfig):
         super().__init__(
             **kwargs
             )
+        self.seed = seed
         self.time_lag = time_lag
         self.bin_size = bin_size
         self.num_latents = num_latents

@@ -2,13 +2,12 @@ from Config import my_POSSMConfig
 config = my_POSSMConfig()
 
 from tqdm import tqdm
-from Dataloder import get_dataloader
+from Dataloader import get_dataloader
 from Model import my_POSSM
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
 hyperparam = {
-    "seed": 42,
     "batch_size": 32,
     "num_epochs": 10,
     "learning_rate": 0.001,
@@ -35,48 +34,69 @@ def set_seed(seed):
 def masked_mse_loss(output, target, lengths):
     """
     Args:
-        output: (batch_size, max_time_length, 2)
-        target: (batch_size, max_time_length, 2)
-        lengths: (batch_size) - 存储每个样本的有效长度
+        output: (batch_size, bin_size, feature_dim) -> 模型输出
+        target: (batch_size, time_length, feature_dim) -> 真实标签
+        lengths: (batch_size,) -> 每个样本的真实时间步长
     """
-    # 1. 生成基础掩码 (batch_size, max_time_length)
-    batch_size, max_time, dim = output.shape
+    # 1. 维度对齐 (Alignment)
+    # 取两者中较短的时间长度，防止 shape mismatch
+    # 通常情况下，如果是 Seq2Seq，output 和 target 长度应该一致，但在你的 collate_fn 中可能会有微小差异
+    min_len = min(output.size(1), target.size(1))
+    
+    # 截取有效部分
+    output = output[:, :min_len, :]
+    target = target[:, :min_len, :]
+    
+    # 2. 生成 Mask (Boolean Mask)
+    # shape: (batch_size, min_len)
+    batch_size = output.size(0)
     device = output.device
     
-    # torch.arange(max_time) 生成 [0, 1, 2, ..., max_time-1]
-    # 利用广播机制与 lengths 比较
-    mask = torch.arange(max_time, device=device).expand(batch_size, max_time) < lengths.unsqueeze(1)
+    # 创建位置索引 [0, 1, 2, ... min_len-1]
+    range_tensor = torch.arange(min_len, device=device).unsqueeze(0) # (1, min_len)
+    # 扩展 lengths 以便比较
+    lengths_expanded = lengths.unsqueeze(1).to(device) # (batch_size, 1)
     
-    # 2. 将掩码扩展到特征维度 (batch_size, max_time_length, 2)
-    # 增加最后一个维度并复制
-    mask = mask.unsqueeze(-1).expand_as(output)
+    # 生成 Mask: 如果位置索引 < 真实长度，则为 True (有效)，否则为 False (Padding)
+    mask = range_tensor < lengths_expanded # (batch_size, min_len)
     
-    # 3. 计算平方损失
-    squared_diff = (output - target) ** 2
+    # 3. 计算 MSE (Squared Error)
+    # shape: (batch_size, min_len, feature_dim)
+    loss = (output - target) ** 2
     
-    # 4. 应用掩码并求平均
-    # 只计算 mask 为 True 的部分的均值
-    masked_squared_diff = squared_diff * mask.float()
-    num_valid_elements = mask.sum()
+    # 4. 应用 Mask
+    # 将 mask 扩展到 feature 维度: (batch_size, min_len, 1)
+    mask_expanded = mask.unsqueeze(-1).float()
     
-    loss = masked_squared_diff.sum() / num_valid_elements
-    return loss
-
+    # 只保留有效部分的 loss，padding 部分变为 0
+    masked_loss = loss * mask_expanded
+    
+    # 5. 计算平均值 (Reduction)
+    # 分子：所有有效位置的 loss 之和
+    sum_loss = masked_loss.sum()
+    
+    # 分母：有效元素的总个数 (Time * Feature_dim)
+    # 注意：这里要乘以 output.size(-1) (即 feature_dim=2)，因为 loss 是对每个特征都算了
+    num_active_elements = mask_expanded.sum() * output.size(-1)
+    
+    # 防止分母为 0 (虽然极不可能)
+    mse_loss = sum_loss / (num_active_elements + 1e-8)
+    
+    return mse_loss
 
 def train_one_epoch(model, loader, optimizer, criterion, device, writer, epoch):
     model.train()
     running_loss = 0.0
     
     pbar = tqdm(loader, desc=f"Epoch {epoch}", leave=True)
-    for spike, vel, mask_spike, lengths_spike, lengths_vel in pbar:
+    for spike, vel, spike_lengths, vel_lengths in pbar:
         spike, vel = spike.to(device), vel.to(device)
-        mask_spike, lengths_spike = mask_spike.to(device), lengths_spike.to(device)
-        lengths_vel = lengths_vel.to(device)
+        spike_lengths, vel_lengths = spike_lengths.to(device), vel_lengths.to(device)
 
         optimizer.zero_grad()
-        outputs = model(spike, mask_spike, lengths_spike)
+        outputs = model(spike, spike_lengths)
         
-        loss = criterion(outputs, vel, lengths_vel)
+        loss = criterion(outputs, vel, vel_lengths)
         loss.backward()
         # torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         optimizer.step()
@@ -97,13 +117,12 @@ def validate(model, loader, criterion, device, writer, epoch):
     
     # 注意：这里 loader 返回的数据解包要和 dataset 对应，
     # 你的 dataset 似乎返回 5 个值，这里需要全部接收
-    for spike, vel, mask_spike, lengths_spike, lengths_vel in loader:
+    for spike, vel, spike_lengths, vel_lengths in loader:
         spike, vel = spike.to(device), vel.to(device)
-        mask_spike, lengths_spike = mask_spike.to(device), lengths_spike.to(device)
-        lengths_vel = lengths_vel.to(device)
+        spike_lengths, vel_lengths = spike_lengths.to(device), vel_lengths.to(device)
         
-        outputs = model(spike, mask_spike, lengths_spike)
-        loss = criterion(outputs, vel, lengths_vel) # 使用同样的 masked_mse_loss
+        outputs = model(spike, spike_lengths)
+        loss = criterion(outputs, vel, vel_lengths) # 使用同样的 masked_mse_loss
         
         running_loss += loss.item()
         
@@ -118,9 +137,9 @@ def validate(model, loader, criterion, device, writer, epoch):
 def main():
     writer = SummaryWriter(log_dir=hyperparam['log_dir'])
 
-    set_seed(hyperparam['seed'])
+    set_seed(config.seed)
     train_loader, valid_loader = get_dataloader()
-    model = my_POSSM(config)
+    model = my_POSSM(config).to(hyperparam['device'])
 
     optimizer = torch.optim.SGD(model.parameters(), lr=hyperparam['learning_rate'], momentum=0.9) 
     criterion = masked_mse_loss

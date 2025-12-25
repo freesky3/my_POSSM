@@ -25,13 +25,13 @@ class POSSM_Backbone_GRU(nn.Module):
             dropout=dropout if num_layers > 1 else 0.0
         )
 
-    def forward(self, z_t, lengths, h_prev=None):
+    def forward(self, z_t, h_prev=None):
         """
         前向传播
         
         Args:
             z_t: 来自 Input Cross-Attention 的潜在向量。
-                 Shape: (batch_size, max_bin, num_latents, embed_dim)
+                 Shape: (batch_size, k_history, num_latents, embed_dim)
             lengths: 每个序列的长度
                 Shape: (batch_size)
             h_prev: 上一时刻的隐藏状态。
@@ -42,13 +42,10 @@ class POSSM_Backbone_GRU(nn.Module):
             output: GRU 所有时间步的输出 (Batch, Seq_Len, hidden_dim)
             h_new: 更新后的隐藏状态 (num_layers, Batch, hidden_dim)
         """
-        # output 包含序列中每个时间步的 hidden state (用于 Output Attention), shape: (batch_size, max_bin, hidden_dim)
+        # output 包含序列中每个时间步的 hidden state (用于 Output Attention), shape: (batch_size, k_history, hidden_dim)
         # h_new 是序列最后一个时间步的 hidden state (用于传给下一个 chunk), shape: (num_layers, batch_size, hidden_dim)
-        max_bin = z_t.shape[1]
-        z_t = z_t.view(z_t.shape[0], z_t.shape[1], -1)
-        lengths_cpu = lengths.cpu().to(torch.int64)
-        packed_input = pack_padded_sequence(z_t, lengths_cpu, batch_first=True, enforce_sorted=False)
-        output, h_new = self.gru(packed_input, h_prev)
-        output_padded, _ = pad_packed_sequence(output, batch_first=True, total_length=max_bin)
+        batch_size, k_history = z_t.shape[0], z_t.shape[1]
+        z_t = z_t.view(batch_size, k_history, -1)
+        output, h_new = self.gru(z_t, h_prev)
         
-        return output_padded, h_new
+        return output, h_new
