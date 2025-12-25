@@ -8,7 +8,7 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 
 hyperparam = {
-    "batch_size": 32,
+    "batch_size": 256,
     "num_epochs": 10,
     "learning_rate": 0.001,
     "device": "cuda" if torch.cuda.is_available() else "cpu",
