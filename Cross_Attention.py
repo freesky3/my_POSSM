@@ -119,10 +119,10 @@ class POSSMCrossAttention(nn.Module):
         
         # 步骤 D: 应用 Mask
         # 将 Mask 为 True (即 Padding 部分) 的位置设为负无穷
-        scores = scores.masked_fill(mask, float('-inf'))
-        
-        scores = self.attn_dropout(scores)
-        output = scores @ xv # (batch_size, k_history, num_attention_heads, num_latents, head_dim)
+        attn_weights = attn_weights.masked_fill(mask, float('-inf'))
+        attn_weights = F.softmax(attn_weights, dim=-1)
+        attn_weights = self.attn_dropout(attn_weights)
+        output = attn_weights @ xv # (batch_size, k_history, num_attention_heads, num_latents, head_dim)
 
         # 6. Output Projection
         output = output.transpose(2, 3).reshape(batch_size, k_history, self.num_latents, -1) # (batch_size, k_history, num_latents, n_heads * head_dim)
