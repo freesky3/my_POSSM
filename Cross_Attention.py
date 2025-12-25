@@ -121,6 +121,7 @@ class POSSMCrossAttention(nn.Module):
         # 将 Mask 为 True (即 Padding 部分) 的位置设为负无穷
         attn_weights = scores.masked_fill(mask, float('-inf'))
         attn_weights = F.softmax(attn_weights, dim=-1)
+        attn_weights = torch.nan_to_num(attn_weights, nan=0.0)
         attn_weights = self.attn_dropout(attn_weights)
         output = attn_weights @ xv # (batch_size, k_history, num_attention_heads, num_latents, head_dim)
 
