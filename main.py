@@ -7,6 +7,11 @@ from Model import my_POSSM
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
+import json
+meta_data = json.load(open("processed_data/meta_data.json", "r"))
+VEL_MEAN = torch.tensor(meta_data["vel_mean"], dtype=torch.float32)
+VEL_STD = torch.tensor(meta_data["vel_std"], dtype=torch.float32)
+
 hyperparam = {
     "batch_size": 256,
     "num_epochs": 10,
@@ -86,6 +91,8 @@ def masked_mse_loss(output, target, lengths):
 
 def train_one_epoch(model, loader, optimizer, criterion, device, writer, epoch):
     model.train()
+    mean_tensor = VEL_MEAN.to(device)
+    std_tensor = VEL_STD.to(device) + 1e-6
     running_loss = 0.0
     
     pbar = tqdm(loader, desc=f"Epoch {epoch}", leave=True)
@@ -95,8 +102,9 @@ def train_one_epoch(model, loader, optimizer, criterion, device, writer, epoch):
 
         optimizer.zero_grad()
         outputs = model(spike, spike_lengths)
+        normalized_vel = (vel - mean_tensor) / std_tensor
+        loss = criterion(outputs, normalized_vel, vel_lengths)
         
-        loss = criterion(outputs, vel, vel_lengths)
         loss.backward()
         # torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         optimizer.step()
@@ -113,7 +121,10 @@ def train_one_epoch(model, loader, optimizer, criterion, device, writer, epoch):
 @torch.no_grad()
 def validate(model, loader, criterion, device, writer, epoch):
     model.eval()
+    mean_tensor = VEL_MEAN.to(device)
+    std_tensor = VEL_STD.to(device) + 1e-6
     running_loss = 0.0
+
     
     # 注意：这里 loader 返回的数据解包要和 dataset 对应，
     # 你的 dataset 似乎返回 5 个值，这里需要全部接收
@@ -122,7 +133,8 @@ def validate(model, loader, criterion, device, writer, epoch):
         spike_lengths, vel_lengths = spike_lengths.to(device), vel_lengths.to(device)
         
         outputs = model(spike, spike_lengths)
-        loss = criterion(outputs, vel, vel_lengths) # 使用同样的 masked_mse_loss
+        normalized_vel = (vel - mean_tensor) / std_tensor
+        loss = criterion(outputs, normalized_vel, vel_lengths) # 使用同样的 masked_mse_loss
         
         running_loss += loss.item()
         

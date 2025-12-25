@@ -81,6 +81,21 @@ for index, row in tqdm(dataset.trial_info.iterrows()):
 
 torch.save(sliced_trials, "processed_data/sliced_trials.pt")
 
+# =================【新增代码：计算统计量】=================
+# 1. 收集所有 trial 的 velocity 数据
+all_vels = []
+for trial in sliced_trials:
+    all_vels.append(trial['vel']) # list of arrays
+
+# 2. 拼接成一个巨大的数组 (Total_Time_Points, 2)
+all_vels_concat = np.concatenate(all_vels, axis=0)
+
+# 3. 计算均值和标准差 (axis=0 表示对每个特征维度 x, y 分别计算)
+vel_mean = np.mean(all_vels_concat, axis=0) # shape (2,)
+vel_std = np.std(all_vels_concat, axis=0)   # shape (2,)
+
+print(f"Velocity Mean: {vel_mean}")
+print(f"Velocity Std: {vel_std}")
 
 meta_data = {
     "channel_ids": list(channel_ids),
@@ -89,7 +104,9 @@ meta_data = {
     "num_bin_each_channel": {trial['trial_id']:len(trial["spikes"]) for trial in sliced_trials}, 
     "max_bin": max_bin, 
     "max_token": max_token,
-    "max_time_length": max_time_length
+    "max_time_length": max_time_length, 
+    "vel_mean": vel_mean.tolist(), # [mean_x, mean_y]
+    "vel_std": vel_std.tolist()    # [std_x, std_y]
 }
 
 with open("processed_data/meta_data.json", "w") as f:
