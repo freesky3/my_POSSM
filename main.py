@@ -3,7 +3,7 @@ config = my_POSSMConfig()
 
 from tqdm import tqdm
 from Dataloader import get_dataloader
-from Model import my_POSSM
+from Model import max_time_length, my_POSSM
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
@@ -76,15 +76,17 @@ def train_one_epoch(model, loader, optimizer, criterion, device, writer, epoch):
     running_loss = 0.0
     
     pbar = tqdm(loader, desc=f"Epoch {epoch}", leave=True)
-    for spike, vel, mask_spike, lengths_spike, lengths_vel in pbar:
-        spike, vel = spike.to(device), vel.to(device)
-        mask_spike, lengths_spike = mask_spike.to(device), lengths_spike.to(device)
-        lengths_vel = lengths_vel.to(device)
+    for spike, bin_mask, spike_mask, vel, vel_lens in pbar:
+        spike, bin_mask, spike_mask, vel, vel_lens = spike.to(device), bin_mask.to(device), spike_mask.to(device), vel.to(device), vel_lens.to(device)
+        vel_lens = vel_lens - (config.k_history-1)*config.bin_size
+        max_time_length = vel_lens.max()
 
         optimizer.zero_grad()
-        outputs = model(spike, mask_spike, lengths_spike)
+        outputs = model(spike, bin_mask, spike_mask)
+        outputs = outputs[:, :max_time_length, :] # (batch_size, max_time_length-(config.k_history-1)*config.bin_size, 2)
         normalized_vel = (vel - mean_tensor) / std_tensor
-        loss = criterion(outputs, normalized_vel, lengths_vel)
+        tru_norm_vel = normalized_vel[:, (config.k_history-1)*config.bin_size:, :]
+        loss = criterion(outputs, tru_norm_vel, vel_lens)
         loss.backward()
         # torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         optimizer.step()
@@ -107,14 +109,16 @@ def validate(model, loader, criterion, device, writer, epoch):
     
     # 注意：这里 loader 返回的数据解包要和 dataset 对应，
     # 你的 dataset 似乎返回 5 个值，这里需要全部接收
-    for spike, vel, mask_spike, lengths_spike, lengths_vel in loader:
-        spike, vel = spike.to(device), vel.to(device)
-        mask_spike, lengths_spike = mask_spike.to(device), lengths_spike.to(device)
-        lengths_vel = lengths_vel.to(device)
+    for spike, bin_mask, spike_mask, vel, vel_lens in tqdm(loader, desc=f"Validating", leave=True):
+        spike, bin_mask, spike_mask, vel, vel_lens = spike.to(device), bin_mask.to(device), spike_mask.to(device), vel.to(device), vel_lens.to(device)
+        vel_lens = vel_lens - (config.k_history-1)*config.bin_size
+        max_time_length = vel_lens.max()
         
-        outputs = model(spike, mask_spike, lengths_spike)
-        normalized_vel = (vel - mean_tensor) / std_tensor
-        loss = criterion(outputs, normalized_vel, lengths_vel) # 使用同样的 masked_mse_loss
+        outputs = model(spike, bin_mask, spike_mask)
+        outputs = outputs[:, :max_time_length, :] # (batch_size, max_time_length-(config.k_history-1)*config.bin_size, 2)
+        norm_vel = (vel - mean_tensor) / std_tensor
+        tru_norm_vel = norm_vel[:, (config.k_history-1)*config.bin_size:, :]
+        loss = criterion(outputs, tru_norm_vel, vel_lens) # 使用同样的 masked_mse_loss
         
         running_loss += loss.item()
         

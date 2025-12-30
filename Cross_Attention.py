@@ -104,7 +104,7 @@ class POSSMCrossAttention(nn.Module):
 
         # Apply mask if provided
         mask = mask_spike.unsqueeze(2).unsqueeze(2) # (batch_size, max_bin, 1, 1, max_token)
-        scores = scores.masked_fill(mask == True, float('-inf'))
+        scores = scores.masked_fill(mask == False, float('-inf'))
         
         scores = F.softmax(scores.float(), dim=-1).type_as(xq)
         if torch.isnan(scores).any():

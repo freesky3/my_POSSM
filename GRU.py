@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_sequence
+from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 class POSSM_Backbone_GRU(nn.Module):
     def __init__(self, input_dim, hidden_dim=256, num_layers=1, dropout=0.0):
@@ -25,30 +25,36 @@ class POSSM_Backbone_GRU(nn.Module):
             dropout=dropout if num_layers > 1 else 0.0
         )
 
-    def forward(self, z_t, lengths, h_prev=None):
+    def forward(self, z_t, bin_mask, h_prev=None):
         """
         前向传播
         
         Args:
             z_t: 来自 Input Cross-Attention 的潜在向量。
                  Shape: (batch_size, max_bin, num_latents, embed_dim)
-            lengths: 每个序列的长度
-                Shape: (batch_size)
+            bin_mask: 布尔掩码，标识每个序列的有效位置。
+                Shape: (batch_size, max_bin)，True表示有效位置，False表示padding
             h_prev: 上一时刻的隐藏状态。
                     Shape: (num_layers, Batch, hidden_dim)
                     如果是序列开始，可以为 None (默认为全0)。
         
         Returns:
-            output: GRU 所有时间步的输出 (Batch, Seq_Len, hidden_dim)
-            h_new: 更新后的隐藏状态 (num_layers, Batch, hidden_dim)
+            output: GRU 所有时间步的输出 (Batch, max_bin, hidden_dim)
         """
         # output 包含序列中每个时间步的 hidden state (用于 Output Attention), shape: (batch_size, max_bin, hidden_dim)
-        # h_new 是序列最后一个时间步的 hidden state (用于传给下一个 chunk), shape: (num_layers, batch_size, hidden_dim)
-        max_bin = z_t.shape[1]
-        z_t = z_t.view(z_t.shape[0], z_t.shape[1], -1)
+        batch_size, max_bin = z_t.shape[0], z_t.shape[1]
+        z_t = z_t.view(batch_size, max_bin, -1)
+        
+        # 从 bin_mask 计算每个序列的实际长度
+        # bin_mask: (batch_size, max_bin)，对每个序列求和得到有效长度
+        lengths = bin_mask.sum(dim=1)  # Shape: (batch_size,)
         lengths_cpu = lengths.cpu().to(torch.int64)
+        
+        # 使用 pack_padded_sequence 处理变长序列，提高计算效率
         packed_input = pack_padded_sequence(z_t, lengths_cpu, batch_first=True, enforce_sorted=False)
-        output, h_new = self.gru(packed_input, h_prev)
+        output, _ = self.gru(packed_input, h_prev)
+        
+        # 将打包的输出重新填充为固定长度，便于后续处理
         output_padded, _ = pad_packed_sequence(output, batch_first=True, total_length=max_bin)
         
-        return output_padded, h_new
+        return output_padded

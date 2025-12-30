@@ -26,15 +26,13 @@ class my_POSSM(nn.Module):
         self.register_buffer("freqs_sin", freqs_sin)
         self.output_decoder = POSSMOutputDecoder(config)
 
-    def forward(self, spike, mask_spike, lengths_spike):
+    def forward(self, spike, bin_mask, spike_mask):
         # spike: (batch, max_bin, max_token, 2)
-        # mask_spike: (batch, max_bin, max_token)
-        # channels: (batch, max_bin, max_token)
-        # offsets: (batch, max_bin, max_token)
+        # bin_mask: (batch, max_bin)
+        # spike_mask: (batch, max_bin, max_token)
         channels, offsets = spike[..., 0], spike[..., 1]
         emb = self.emb(channels) # (batch, max_bin, max_token, embed_dim)
-        z = self.Cross_Attention(emb, offsets, mask_spike, self.freqs_cos, self.freqs_sin) # (batch_size, max_bin, num_latents, embed_dim)
-        h, _ = self.gru(z, lengths_spike) # h: (batch_size, max_bin, hidden_dim)
-        vel_pred = self.output_decoder(h, self.freqs_cos, self.freqs_sin) # (batch_size, max_bin * bin_size, 2)
-        vel_pred = vel_pred[:, :max_time_length, :] # (batch_size, max_time_length, 2)
+        z = self.Cross_Attention(emb, offsets, spike_mask, self.freqs_cos, self.freqs_sin) # (batch_size, max_bin, num_latents, embed_dim)
+        h = self.gru(z, bin_mask) # h: (batch_size, max_bin, hidden_dim)
+        vel_pred = self.output_decoder(h, self.freqs_cos, self.freqs_sin) # (batch_size, (max_bin+k-1) * bin_size, 2)
         return vel_pred

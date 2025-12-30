@@ -41,7 +41,7 @@ class RotaryEmbedding:
         return torch.cat([freqs_cos, freqs_cos], dim=-1), torch.cat([freqs_sin, freqs_sin], dim=-1)
 
     @staticmethod
-    def apply_rotary_pos_emb(q, k, cos, sin, offset, is_decoder):
+    def apply_rotary_pos_emb(q, k, cos, sin, offset=None, is_decoder=False):
         """
         将旋转位置编码 (RoPE) 应用于 Query 和 Key 向量。
 
