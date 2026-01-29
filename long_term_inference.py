@@ -120,7 +120,7 @@ def main():
     
     # --- 2. Load Model ---
     print(f"Loading model from {model_path}...")
-    model = my_POSSM(config).to(device)
+    model = my_POSSM(config, num_channel=96).to(device)
     model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
     
     # --- 3. Load Session 0 Metadata (Training Distribution) ---
