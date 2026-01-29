@@ -4,11 +4,6 @@ import torch
 from torch.utils.data import Dataset, DataLoader, random_split
 from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_sequence
 
-import json
-meta_data = json.load(open("processed_data/meta_data.json", "r"))
-max_bin = meta_data["max_bin"]
-max_token = meta_data["max_token"]
-
 
 class my_dataset(Dataset):
     '''

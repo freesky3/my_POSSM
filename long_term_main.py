@@ -3,7 +3,7 @@ config = my_POSSMConfig()
 
 from tqdm import tqdm
 from Dataloader import get_dataloader
-from Model import max_time_length, my_POSSM
+from Model import my_POSSM
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
@@ -139,7 +139,8 @@ def main():
 
     set_seed(hyperparam['seed'])
     train_loader, valid_loader = get_dataloader(data_dir="long_term_data/Chewie_processed/session_0/sliced_trials.pt")
-    model = my_POSSM(config).to(hyperparam['device'])
+    num_channel = meta_data["num_channel"]
+    model = my_POSSM(config, num_channel=num_channel).to(hyperparam['device'])
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=hyperparam['learning_rate'], weight_decay=hyperparam['weight_decay'])
     criterion = masked_mse_loss

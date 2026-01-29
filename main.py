@@ -134,7 +134,8 @@ def main():
 
     set_seed(hyperparam['seed'])
     train_loader, valid_loader = get_dataloader()
-    model = my_POSSM(config).to(hyperparam['device'])
+    num_channel = meta_data["num_channel"]
+    model = my_POSSM(config, num_channel=num_channel).to(hyperparam['device'])
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=hyperparam['learning_rate'], weight_decay=hyperparam['weight_decay'])
     criterion = masked_mse_loss

@@ -143,7 +143,10 @@ def main():
     
     for session_id in range(12): # 0 to 11
         data_path = f"long_term_data/Chewie_processed/session_{session_id}/sliced_trials.pt"
-        
+        meta_data_path = f"long_term_data/Chewie_processed/session_{session_id}/meta_data.json"
+        num_channel = json.load(open(meta_data_path, "r"))["num_channel"]
+        if num_channel != 96:
+            continue
         loader = get_inference_dataloader(data_path)
         
         if loader is None:
