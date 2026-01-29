@@ -41,7 +41,7 @@ def pad_collate_fn(batch):
     bin_seq_lens_restored = [torch.tensor(list(islice(it_len, l))) for l in bins_per_trial]
     padded_seq_lens = pad_sequence(bin_seq_lens_restored, batch_first=True, padding_value=0)
 
-    tensor_unfold_spikes = [torch.tensor(x) for x in new_unfold_spikes]
+    tensor_unfold_spikes = [x.clone().detach() if isinstance(x, torch.Tensor) else torch.tensor(x) for x in new_unfold_spikes]
     padded_unfold_spikes = pad_sequence(tensor_unfold_spikes, batch_first=True, padding_value=0)
     it = iter(padded_unfold_spikes)
     padded_spikes = [list(islice(it, trial_len)) for trial_len in bins_per_trial]
@@ -65,7 +65,7 @@ def pad_collate_fn(batch):
     return padded_bin, bin_mask, spike_mask, vel, vel_lens
 
 
-def get_dataloader(data_dir="processed_data/sliced_trials.pt", batch_size=16, n_workers=0):
+def get_dataloader(data_dir="processed_data/sliced_trials.pt", batch_size=8, n_workers=0):
     """Generate dataloader"""
     dataset = my_dataset(data_dir)
     # Split dataset into training dataset and validation dataset

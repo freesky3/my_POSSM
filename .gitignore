@@ -14,6 +14,13 @@ wheels/
 processed_data/
 long_term_data/
 
+# model
+long_term_model.pth
+
+# log
+log/
+long_term_log/
+
 # wait to write
 Mamba.py
 S4D.py

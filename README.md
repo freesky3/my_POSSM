@@ -47,3 +47,6 @@ dandi download DANDI:000128/0.220113.0400
 
 
 同样位置，神经元放电模式？脉冲神经网络？
+
+长期数据的下载网页：[Using adversarial networks to extend brain computer interface decoding accuracy over time](https://zenodo.org/records/8271239)
+

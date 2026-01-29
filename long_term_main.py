@@ -8,7 +8,7 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 
 import json
-meta_data = json.load(open("processed_data/meta_data.json", "r"))
+meta_data = json.load(open("long_term_data/Chewie_processed/session_0/meta_data.json", "r"))
 VEL_MEAN = torch.tensor(meta_data["vel_mean"], dtype=torch.float32)
 VEL_STD = torch.tensor(meta_data["vel_std"], dtype=torch.float32)
 
@@ -18,7 +18,9 @@ hyperparam = {
     "learning_rate": 0.001,
     "weight_decay": 1e-4,
     "device": "cuda" if torch.cuda.is_available() else "cpu",
-    "log_dir": "./log",
+    "patience": 20,
+    "log_dir": "./long_term_log",
+    "model_path": "./long_term_model.pth",
 }
 
 import numpy as np
@@ -132,8 +134,11 @@ def validate(model, loader, criterion, device, writer, epoch):
 def main():
     writer = SummaryWriter(log_dir=hyperparam['log_dir'])
 
+    best_val_loss = float('inf')
+    early_stopping_counter = 0
+
     set_seed(hyperparam['seed'])
-    train_loader, valid_loader = get_dataloader()
+    train_loader, valid_loader = get_dataloader(data_dir="long_term_data/Chewie_processed/session_0/sliced_trials.pt")
     model = my_POSSM(config).to(hyperparam['device'])
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=hyperparam['learning_rate'], weight_decay=hyperparam['weight_decay'])
@@ -144,6 +149,24 @@ def main():
         val_loss = validate(model, valid_loader, criterion, hyperparam['device'], writer, epoch)
 
         print(f'Epoch {epoch+1}/{hyperparam["num_epochs"]}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}')
+
+        # 1. 检查是否是最佳模型
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            early_stopping_counter = 0  # 重置计数器
+            
+            # 保存最佳模型权重
+            torch.save(model.state_dict(), hyperparam['model_path'])
+            print(f"--> Best model saved at epoch {epoch+1} with Val Loss: {val_loss:.4f}")
+            
+        else:
+            early_stopping_counter += 1
+            print(f"--> No improvement. Patience: {early_stopping_counter}/{hyperparam['patience']}")
+
+        # 2. 检查是否触发早停
+        if early_stopping_counter >= hyperparam['patience']:
+            print(f"Early stopping triggered at epoch {epoch+1}!")
+            break
 
 
 

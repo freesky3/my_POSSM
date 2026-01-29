@@ -14,7 +14,9 @@ import os
 os.makedirs("processed_data", exist_ok=True)
 
 # Load dataset
-dataset = NWBDataset("./000128/sub-Jenkins/", "*train", split_heldout=False)
+# dataset = NWBDataset("./000128/sub-Jenkins/", "*train", split_heldout=False)
+dataset = NWBDataset("./long_term_data/sub-Monkey-N_ses-20200127_ecephys.nwb", "*train", split_heldout=False)
+save_path = "long_term_data/processed_data_0127"
 
 channel_ids = dataset.data['spikes'].keys()
 num_channel = len(channel_ids) # 182 channels
@@ -23,7 +25,7 @@ channel_id_to_idx = {raw_id: i for i, raw_id in enumerate(channel_ids)}
 # 1. Slice spikes into bins
 def spike_slice_bins(input):
     time_length, num_channel = input.shape
-    active_spike = [0]*(time_length//config.bin_size + 1)
+    active_spike = [0]*int(np.ceil(time_length / config.bin_size))
 
     time_idxs, chan_idxs = np.nonzero(input)
     bin_indices = time_idxs // config.bin_size
@@ -64,7 +66,7 @@ for index, row in tqdm(dataset.trial_info.iterrows()):
     vel_has_nan = np.isnan(v_vals).any(axis=1)
     valid_mask = ~spikes_has_nan & ~vel_has_nan
 
-    spikes = s_vals[valid_mask] # shape: [time_length, channels]
+    spikes = s_vals[valid_mask] # shape: [[(cid, offset), (cid, offset), ...], [(cid, offset), (cid, offset), ...], ...]
     vel = v_vals[valid_mask] # shape: [time_length, 2] i.e. [[x, y], [x, y], ...]
     active_spike = spike_slice_bins(spikes) # shape: length is bin_size, each element is a list of (channel_id, offset), or 0 if no spike
     trial_max_token = max([len(bin) for bin in active_spike if bin != 0])
@@ -79,7 +81,7 @@ for index, row in tqdm(dataset.trial_info.iterrows()):
     max_token = max(max_token, trial_max_token)
     max_time_length = max(max_time_length, len(vel))
 
-torch.save(sliced_trials, "processed_data/sliced_trials.pt")
+torch.save(sliced_trials, f"{save_path}/sliced_trials.pt")
 
 # =================【新增代码：计算统计量】=================
 # 1. 收集所有 trial 的 velocity 数据
@@ -109,5 +111,5 @@ meta_data = {
     "vel_std": vel_std.tolist()    # [std_x, std_y]
 }
 
-with open("processed_data/meta_data.json", "w") as f:
+with open(f"{save_path}/meta_data.json", "w") as f:
     json.dump(meta_data, f, indent=4)

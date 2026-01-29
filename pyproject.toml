@@ -14,6 +14,7 @@ dependencies = [
     "transformers>=4.57.3",
     "tensorboard>=2.20.0",
     "dandi>=0.74.0",
+    "mat73>=0.65",
 ]
 
 [dependency-groups]
